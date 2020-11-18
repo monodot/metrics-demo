@@ -1,0 +1,163 @@
+kind: List
+items:
+- apiVersion: image.openshift.io/v1
+  kind: ImageStream
+  metadata:
+    labels:
+      build: toms-hygieia-ui-artifacts
+    name: toms-hygieia-ui-artifacts
+- kind: BuildConfig
+  apiVersion: build.openshift.io/v1
+  metadata:
+    name: toms-hygieia-ui-artifacts
+    labels:
+      build: toms-hygieia-ui-artifacts
+  spec:
+    source:
+      type: Git
+      git:
+        uri: "https://github.com/Hygieia/UI"
+        ref: master
+    strategy:
+      type: Source
+      sourceStrategy:
+        env:
+          - name: FOO
+            value: bar
+        from:
+          kind: ImageStreamTag
+          namespace: openshift
+          name: 'nodejs:12'
+    output:
+      to:
+        kind: ImageStreamTag
+        name: 'toms-hygieia-ui-artifacts:latest'
+    triggers:
+      - type: ConfigChange
+      - type: ImageChange
+- apiVersion: image.openshift.io/v1
+  kind: ImageStream
+  metadata:
+    labels:
+      build: toms-hygieia-ui
+    name: toms-hygieia-ui
+- kind: BuildConfig
+  apiVersion: build.openshift.io/v1
+  metadata:
+    name: toms-hygieia-ui
+    labels:
+      build: toms-hygieia-ui
+  spec:
+    source:
+      images:
+        - from:
+            kind: ImageStreamTag
+            name: 'toms-hygieia-ui-artifacts:latest'
+          paths:
+            - sourcePath: "/opt/app-root/src/dist/hygieia-ui/."
+              destinationDir: "."
+    strategy:
+      type: Source
+      sourceStrategy:
+        env:
+          - name: BUILD_LOGLEVEL
+            value: "8"
+        from:
+          kind: ImageStreamTag
+          namespace: openshift
+          name: 'httpd:2.4'
+    output:
+      to:
+        kind: ImageStreamTag
+        name: 'toms-hygieia-ui:latest'
+    triggers:
+      - type: ImageChange
+        imageChange:
+          from:
+            kind: ImageStreamTag
+            name: 'toms-hygieia-ui-artifacts:latest'
+- apiVersion: apps.openshift.io/v1
+  kind: DeploymentConfig
+  metadata:
+    annotations:
+      app.openshift.io/connects-to: toms-hygieia-api
+    labels:
+      app: toms-hygieia-ui
+      app.kubernetes.io/component: toms-hygieia-ui
+      app.kubernetes.io/instance: toms-hygieia-ui
+      app.kubernetes.io/name: toms-hygieia-ui
+    name: toms-hygieia-ui
+  spec:
+    replicas: 1
+    selector:
+      deploymentconfig: toms-hygieia-ui
+    strategy:
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          deploymentconfig: toms-hygieia-ui
+      spec:
+        containers:
+        - image: ''
+          name: toms-hygieia-ui
+          ports:
+          - containerPort: 8080
+            protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 30
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 3
+            timeoutSeconds: 3
+    triggers:
+    - type: ImageChange
+      imageChangeParams:
+        automatic: true
+        containerNames:
+        - toms-hygieia-ui
+        from:
+          kind: ImageStreamTag
+          name: toms-hygieia-ui:latest
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: toms-hygieia-ui
+      app.kubernetes.io/component: toms-hygieia-ui
+      app.kubernetes.io/instance: toms-hygieia-ui
+      app.kubernetes.io/name: toms-hygieia-ui
+    name: toms-hygieia-ui
+  spec:
+    ports:
+    - name: 8080-tcp
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+    selector:
+      deploymentconfig: toms-hygieia-ui
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    labels:
+      app: toms-hygieia-ui
+      app.kubernetes.io/component: toms-hygieia-ui
+      app.kubernetes.io/instance: toms-hygieia-ui
+      app.kubernetes.io/name: toms-hygieia-ui
+    name: toms-hygieia-ui
+  spec:
+    port:
+      targetPort: 8080-tcp
+    to:
+      kind: Service
+      name: toms-hygieia-ui
+      weight: 100
+    tls:
+      termination: Edge
+      insecureEdgeTerminationPolicy: Redirect
