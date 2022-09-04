@@ -1,0 +1,53 @@
+---
+{{- if eq .Values.ui.enabled -}}
+apiVersion: apps.openshift.io/v1
+kind: DeploymentConfig
+metadata:
+  annotations:
+    app.openshift.io/connects-to: {{ .Values.appName }}-api
+  labels:
+    app: {{ .Values.appName }}-ui
+    app.kubernetes.io/component: {{ .Values.appName }}-ui
+    app.kubernetes.io/instance: {{ .Values.appName }}-ui
+    app.kubernetes.io/name: {{ .Values.appName }}-ui
+    app.kubernetes.io/part-of: {{ .Values.appName }}
+  name: {{ .Values.appName }}-ui
+spec:
+  replicas: 1
+  selector:
+    deploymentconfig: {{ .Values.appName }}-ui
+  template:
+    metadata:
+      labels:
+        deploymentconfig: {{ .Values.appName }}-ui
+    spec:
+      containers:
+      - image: ''
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 30
+          timeoutSeconds: 3
+        name: hygieia-ui
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 3
+          timeoutSeconds: 3
+  triggers:
+  - imageChangeParams:
+      automatic: true
+      containerNames:
+      - hygieia-ui
+      from:
+        kind: ImageStreamTag
+        name: {{ .Values.appName }}-ui:latest
+    type: ImageChange
+{{- end }}
